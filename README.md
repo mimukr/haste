@@ -29,5 +29,7 @@ alias haste="~/.cli-venv/bin/python3 ~/code/haste/haste.py"
 **Example**
 
 ```bash
-haste "beep boop"
+> haste lama "The quickest fix of them all"
+Created issue: https://github.com/LEGO/lama/issues/1325
+Created branch: 1325/the-quickest-fix-of-them-all
 ```
