@@ -1,8 +1,13 @@
 import sys
 from pathlib import Path
 
+import requests
 from github import Github, UnknownObjectException
+from github.Issue import Issue
+from github.NamedUser import NamedUser
 from github.Repository import Repository
+
+from constants import CAP_PROJECT_ID, STATUS_FIELD_ID
 
 
 def get_args() -> tuple[str, str]:
@@ -32,8 +37,33 @@ def get_repo(gh: Github, repo_name: str) -> Repository:
         raise Exception(f"Repository LEGO/{repo_name} not found") from ex
 
 
+def create_issue(repo: Repository, title: str, assignee: NamedUser) -> Issue:
+    return repo.create_issue(
+        title=title,
+        body="This issue was created by https://github.com/mimukr/haste",
+        assignee=assignee,
+        labels=["bug"],
+    )
+
+
+def graphql(token: str, query: str, variables: dict) -> dict:
+    req = requests.post(
+        "https://api.github.com/graphql",
+        headers={"Authorization": f"bearer {token}"},
+        json={"query": query, "variables": variables},
+    )
+    req.raise_for_status()
+    return req.json()
+
+
 if __name__ == "__main__":
     repo_name, issue_title = get_args()
-    gh = Github(get_github_token())
+    token = get_github_token()
+    gh = Github(token)
 
+    auth_user = gh.get_user()
+    me = gh.get_user_by_id(auth_user.id)
     repo = get_repo(gh, repo_name)
+
+    issue = create_issue(repo, issue_title, me)
+    print(f"Created issue {issue.html_url}")

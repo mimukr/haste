@@ -7,7 +7,7 @@
 ```bash
 python3 -m venv ~/.cli-venv
 source ~/.cli-venv/bin/activate
-pip3 install pygithub
+pip3 install pygithub requests
 ```
 
 **2) Clone this repository**
