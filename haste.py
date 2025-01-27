@@ -1,4 +1,5 @@
 import sys
+import time
 from pathlib import Path
 
 import requests
@@ -7,7 +8,7 @@ from github.Issue import Issue
 from github.NamedUser import NamedUser
 from github.Repository import Repository
 
-from constants import CAP_PROJECT_ID, STATUS_FIELD_ID
+from constants import STATUS_FIELD_ID
 
 
 def get_args() -> tuple[str, str]:
@@ -38,15 +39,63 @@ def get_repo(gh: Github, repo_name: str) -> Repository:
 
 
 def create_issue(repo: Repository, title: str, assignee: NamedUser) -> Issue:
-    return repo.create_issue(
+    issue = repo.create_issue(
         title=title,
         body="This issue was created by https://github.com/mimukr/haste",
         assignee=assignee,
         labels=["bug"],
     )
+    print(f"Created issue {issue.html_url}")
+    return issue
 
 
-def graphql(token: str, query: str, variables: dict) -> dict:
+def get_project_issue(
+    token: str,
+    repo_name: str,
+    issue_number: int,
+) -> dict | None:
+    query = """
+    query {
+      repository(owner:"LEGO", name:"%s") {
+        issue(number: %s) {
+          projectItems(first: 2) {
+            nodes {
+              id
+              project {
+                id
+              }
+            }
+          }
+        }
+      }
+    }
+    """ % (
+        repo_name,
+        issue_number,
+    )
+    res = graphql(token, query)
+    project_issues = res["data"]["repository"]["issue"]["projectItems"]["nodes"]
+    if len(project_issues) == 0:
+        return None
+    elif len(project_issues) > 1:
+        raise Exception("More than one project issue found")
+    else:
+        return project_issues[0]
+
+
+def wait_for_project_issue(token: str, repo_name: str, issue_number: int) -> dict:
+    wait_until = time.time() + 10
+    while True:
+        print("Waiting for issue to appear in project...")
+        if time.time() > wait_until:
+            raise Exception("Timed out waiting for issue to appear in project")
+        res = get_project_issue(token, repo_name, issue_number)
+        if res:
+            return res
+        time.sleep(1)
+
+
+def graphql(token: str, query: str, variables: dict | None = None) -> dict:
     req = requests.post(
         "https://api.github.com/graphql",
         headers={"Authorization": f"bearer {token}"},
@@ -66,4 +115,6 @@ if __name__ == "__main__":
     repo = get_repo(gh, repo_name)
 
     issue = create_issue(repo, issue_title, me)
-    print(f"Created issue {issue.html_url}")
+    project_issue = wait_for_project_issue(token, repo_name, issue.number)
+    project_issue_id = project_issue["id"]
+    project_id = project_issue["project"]["id"]
