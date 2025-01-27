@@ -10,7 +10,7 @@ source ~/.cli-venv/bin/activate
 pip3 install pygithub
 ```
 
-**2) Clone or otherwise download haste.py**
+**2) Clone this repository**
 
 ```bash
 cd ~/code
