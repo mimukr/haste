@@ -1,10 +1,12 @@
+import re
 import sys
 import time
 from pathlib import Path
+from subprocess import run
 
 import requests
-from github import Github, UnknownObjectException
-from github.GitRef import GitRef
+from github import Github
+from github.Branch import Branch
 from github.Issue import Issue
 from github.NamedUser import NamedUser
 from github.Repository import Repository
@@ -15,12 +17,22 @@ from github.Repository import Repository
 
 
 def get_args() -> tuple[str, str]:
+    features = ["bug"]
+
     args = sys.argv[1:]
-    if not len(args) == 2:
-        raise Exception("Usage: haste <repo> <issue-title>")
-    repo_name = args[0]
+    if not len(args) == 2 or args[0] not in features:
+        raise Exception(f"Usage: haste {'|'.join(features)} \"<issue-title>\"")
+
+    feature = args[0]
     issue_title = args[1]
-    return repo_name, issue_title
+    return feature, issue_title
+
+
+def run_command(command: str, allow_error: bool = False, on_error: Exception | None = None) -> str:
+    result = run(command, shell=True, text=True, capture_output=True, check=False if on_error else not allow_error)
+    if result.returncode != 0 and on_error:
+        raise on_error
+    return result.stdout.strip()
 
 
 def get_github_token() -> str:
@@ -39,15 +51,29 @@ def slugify(text: str) -> str:
 
 
 ################################################################
-# PyGithub wrappers
+# Git CLI wrappers
 ################################################################
 
 
-def get_repo(gh: Github, repo_name: str) -> Repository:
-    try:
-        return gh.get_repo(f"LEGO/{repo_name}")
-    except UnknownObjectException as ex:
-        raise Exception(f"Repository LEGO/{repo_name} not found") from ex
+def get_local_repo() -> str:
+    run_command("git rev-parse --is-inside-work-tree", on_error=Exception("Haste only works inside a git repository"))
+
+    remote_url = run_command("git config --get remote.origin.url")
+    match = re.search(r"github\.com[/:](?P<owner>.+?)/(?P<name>.+?)(\.git)?$", remote_url.strip("/"))
+    if not match:
+        raise Exception(f"Don't know what to do with {remote_url}")
+    return f"{match.group('owner')}/{match.group('name')}"
+
+
+def checkout_branch(branch: Branch):
+    print(f"Checking out branch: {branch.name}")
+    run_command("git fetch origin")
+    run_command(f"git checkout -b {branch.name} origin/{branch.name}")
+
+
+################################################################
+# PyGithub wrappers
+################################################################
 
 
 def create_issue(repo: Repository, title: str, assignee: NamedUser) -> Issue:
@@ -61,10 +87,11 @@ def create_issue(repo: Repository, title: str, assignee: NamedUser) -> Issue:
     return issue
 
 
-def create_branch(repo: Repository, issue: Issue) -> GitRef:
+def create_branch(repo: Repository, issue: Issue) -> Branch:
     main = repo.get_git_ref("heads/main")
-    branch = repo.create_git_ref(f"refs/heads/{issue.number}/{slugify(issue_title)}", main.object.sha)
-    print(f"Created branch: {branch.ref.removeprefix('refs/heads/')}")
+    ref = repo.create_git_ref(f"refs/heads/{issue.number}/{slugify(issue.title)}", main.object.sha)
+    branch = repo.get_branch(ref.ref)
+    print(f"Created branch: {branch.name}")
     return branch
 
 
@@ -86,10 +113,10 @@ def graphql(token: str, query: str, variables: dict | None = None) -> dict:
     return res_json
 
 
-def get_project_issue(token: str, repo_name: str, issue_number: int) -> dict | None:
+def get_project_issue(token: str, repository: Repository, issue_number: int) -> dict | None:
     query = """
     {
-      repository(owner: "LEGO", name: "%s") {
+      repository(owner: "%s", name: "%s") {
         issue(number: %s) {
           projectItems(first: 2) {
             nodes {
@@ -103,7 +130,8 @@ def get_project_issue(token: str, repo_name: str, issue_number: int) -> dict | N
       }
     }
     """ % (
-        repo_name,
+        repo.owner.login,
+        repo.name,
         issue_number,
     )
     res = graphql(token, query)
@@ -116,12 +144,12 @@ def get_project_issue(token: str, repo_name: str, issue_number: int) -> dict | N
         return project_issues[0]
 
 
-def wait_for_project_issue(token: str, repo_name: str, issue_number: int) -> dict:
+def wait_for_project_issue(token: str, repo: Repository, issue_number: int) -> dict:
     wait_until = time.time() + 10
     while True:
         if time.time() > wait_until:
             raise Exception("Timed out waiting for issue to appear in project")
-        res = get_project_issue(token, repo_name, issue_number)
+        res = get_project_issue(token, repo, issue_number)
         if res:
             return res
         print("Waiting for issue to appear in project...")
@@ -189,20 +217,23 @@ def set_status(token: str, project_id: int, item_id: int, field_id: str, option_
 ################################################################
 
 if __name__ == "__main__":
-    repo_name, issue_title = get_args()
+    local_repo = get_local_repo()
+
+    feature, issue_title = get_args()
     token = get_github_token()
     gh = Github(token)
 
     auth_user = gh.get_user()
     me = gh.get_user_by_id(auth_user.id)
-    repo = get_repo(gh, repo_name)
+    repo = gh.get_repo(local_repo)
 
-    # Create issue, branch
+    # Create issue and branch
     issue = create_issue(repo, issue_title, me)
     new_branch = create_branch(repo, issue)
+    checkout_branch(new_branch)
 
     # Set status in project
-    project_issue = wait_for_project_issue(token, repo_name, issue.number)
+    project_issue = wait_for_project_issue(token, repo, issue.number)
     project = project_issue["project"]
 
     status_field, option = get_status_option(token, project["id"], "Done")
