@@ -9,6 +9,7 @@ from github import Github
 from github.Branch import Branch
 from github.Issue import Issue
 from github.NamedUser import NamedUser
+from github.PullRequest import PullRequest
 from github.Repository import Repository
 
 ################################################################
@@ -55,6 +56,11 @@ def slugify(text: str) -> str:
 ################################################################
 
 
+def has_staged_changes() -> bool:
+    result = run_command("git diff --staged")
+    return bool(result)
+
+
 def get_local_repo() -> str:
     run_command("git rev-parse --is-inside-work-tree", on_error=Exception("Haste only works inside a git repository"))
 
@@ -69,6 +75,16 @@ def checkout_branch(branch: Branch):
     run_command("git fetch origin")
     run_command(f"git checkout -b {branch.name} origin/{branch.name}")
     print(f"Checked out branch: {branch.name}")
+
+
+def commit_staged_changes(message: str):
+    run_command(f'git commit -m "{message}"')
+    print("Committed changes")
+
+
+def push_changes():
+    run_command("git push")
+    print("Pushed changes")
 
 
 ################################################################
@@ -93,6 +109,17 @@ def create_branch(repo: Repository, issue: Issue) -> Branch:
     branch = repo.get_branch(ref.ref)
     print(f"Created branch: {branch.name}")
     return branch
+
+
+def create_pull_request(repo: Repository, branch: Branch, issue: Issue) -> PullRequest:
+    pr = repo.create_pull(
+        base="main",
+        head=branch.name,
+        title=issue.title,
+        body=f"Resolves #{issue.number}",
+    )
+    print(f"Created PR: {pr.html_url}")
+    return pr
 
 
 ################################################################
@@ -217,6 +244,9 @@ def set_status(token: str, project_id: int, item_id: int, field_id: str, option_
 ################################################################
 
 if __name__ == "__main__":
+    if not has_staged_changes():
+        raise Exception("No staged changes to commit and create a PR for!")
+
     local_repo = get_local_repo()
 
     feature, issue_title = get_args()
@@ -230,11 +260,18 @@ if __name__ == "__main__":
     # Create issue and branch
     issue = create_issue(repo, issue_title, me)
     new_branch = create_branch(repo, issue)
+
+    # Commit and push staged changes to branch
     checkout_branch(new_branch)
+    commit_staged_changes(f"Fix: {issue_title}")
+    push_changes()
+
+    # Create PR
+    create_pull_request(repo, new_branch, issue)
 
     # Set status in project
     project_issue = wait_for_project_issue(token, repo, issue.number)
     project = project_issue["project"]
 
-    status_field, option = get_status_option(token, project["id"], "Done")
+    status_field, option = get_status_option(token, project["id"], "In progress")
     set_status(token, project["id"], project_issue["id"], status_field["id"], option["id"])

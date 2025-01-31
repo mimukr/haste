@@ -26,7 +26,7 @@ alias haste="~/.cli-venv/bin/python3 ~/code/haste/haste.py"
 
 ### Usage
 
-For haste to work, use within a git repository.
+For haste to work, use within a git repository _with staged changes_.
 
 **Example**
 
@@ -35,4 +35,7 @@ For haste to work, use within a git repository.
 Created issue: https://github.com/ORG/repo/issues/1337
 Created branch: 1337/the-quickest-fix-of-them-all
 Checked out branch: 1337/the-quickest-fix-of-them-all
+Committed changes
+Pushed changes
+Created PR: https://github.com/ORG/repo/pull/1337
 ```
