@@ -66,9 +66,9 @@ def get_local_repo() -> str:
 
 
 def checkout_branch(branch: Branch):
-    print(f"Checking out branch: {branch.name}")
     run_command("git fetch origin")
     run_command(f"git checkout -b {branch.name} origin/{branch.name}")
+    print(f"Checked out branch: {branch.name}")
 
 
 ################################################################

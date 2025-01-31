@@ -34,5 +34,5 @@ For haste to work, use within a git repository.
 >: haste bug "The quickest fix of them all"
 Created issue: https://github.com/LEGO/lama/issues/1325
 Created branch: 1325/the-quickest-fix-of-them-all
-Checking out branch: 1325/the-quickest-fix-of-them-all
+Checked out branch: 1325/the-quickest-fix-of-them-all
 ```
