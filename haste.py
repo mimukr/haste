@@ -1,8 +1,10 @@
 import re
 import sys
 import time
+from dataclasses import dataclass
 from pathlib import Path
 from subprocess import run
+from typing import Callable, TypeAlias
 
 import requests
 from github import Github
@@ -18,15 +20,14 @@ from github.Repository import Repository
 
 
 def get_args() -> tuple[str, str]:
-    features = ["bug"]
-
+    # TODO: Use actual argparse
     args = sys.argv[1:]
-    if not len(args) == 2 or args[0] not in features:
-        raise Exception(f"Usage: haste {'|'.join(features)} \"<issue-title>\"")
+    if not len(args) == 2 or args[0] not in FLOWS:
+        raise Exception(f"Usage: haste {'|'.join(FLOWS)} \"<issue-title>\"")
 
-    feature = args[0]
+    flow = args[0]
     issue_title = args[1]
-    return feature, issue_title
+    return flow, issue_title
 
 
 def run_command(command: str, allow_error: bool = False, on_error: Exception | None = None) -> str:
@@ -77,7 +78,9 @@ def checkout_branch(branch: Branch):
     print(f"Checked out branch: {branch.name}")
 
 
-def commit_staged_changes(message: str):
+def commit_changes(message: str):
+    if not has_staged_changes():
+        run_command("git add --all")
     run_command(f'git commit -m "{message}"')
     print("Committed changes")
 
@@ -140,7 +143,7 @@ def graphql(token: str, query: str, variables: dict | None = None) -> dict:
     return res_json
 
 
-def get_project_issue(token: str, repository: Repository, issue_number: int) -> dict | None:
+def get_project_issue(token: str, repo: Repository, issue_number: int) -> dict | None:
     query = """
     {
       repository(owner: "%s", name: "%s") {
@@ -239,17 +242,56 @@ def set_status(token: str, project_id: int, item_id: int, field_id: str, option_
     graphql(token, query)
 
 
+def do_status_boogaroo(token: str, repo: Repository, issue: Issue, status: str):
+    project_issue = wait_for_project_issue(token, repo, issue.number)
+    project = project_issue["project"]
+
+    status_field, option = get_status_option(token, project["id"], status)
+    set_status(token, project["id"], project_issue["id"], status_field["id"], option["id"])
+
+
+################################################################
+# Flows
+################################################################
+
+
+@dataclass
+class FlowContext:
+    token: str
+    me: NamedUser
+    repo: Repository
+    issue_title: str
+
+
+Flow: TypeAlias = Callable[[FlowContext], None]
+
+
+def bug_flow(ctx: FlowContext):
+    issue = create_issue(ctx.repo, ctx.issue_title, ctx.me)
+    new_branch = create_branch(ctx.repo, issue)
+
+    checkout_branch(new_branch)
+    commit_changes(f"Fix: {ctx.issue_title}")
+    push_changes()
+
+    create_pull_request(ctx.repo, new_branch, issue)
+
+    do_status_boogaroo(ctx.token, ctx.repo, issue, "In progress")
+
+
+FLOWS: dict[str, Flow] = {
+    "bug": bug_flow,
+}
+
 ################################################################
 # Main
 ################################################################
 
-if __name__ == "__main__":
-    if not has_staged_changes():
-        raise Exception("No staged changes to commit and create a PR for!")
 
+def main():
     local_repo = get_local_repo()
 
-    feature, issue_title = get_args()
+    flow_name, issue_title = get_args()
     token = get_github_token()
     gh = Github(token)
 
@@ -257,21 +299,15 @@ if __name__ == "__main__":
     me = gh.get_user_by_id(auth_user.id)
     repo = gh.get_repo(local_repo)
 
-    # Create issue and branch
-    issue = create_issue(repo, issue_title, me)
-    new_branch = create_branch(repo, issue)
+    FLOWS[flow_name](
+        FlowContext(
+            token=token,
+            me=me,
+            repo=repo,
+            issue_title=issue_title,
+        )
+    )
 
-    # Commit and push staged changes to branch
-    checkout_branch(new_branch)
-    commit_staged_changes(f"Fix: {issue_title}")
-    push_changes()
 
-    # Create PR
-    create_pull_request(repo, new_branch, issue)
-
-    # Set status in project
-    project_issue = wait_for_project_issue(token, repo, issue.number)
-    project = project_issue["project"]
-
-    status_field, option = get_status_option(token, project["id"], "In progress")
-    set_status(token, project["id"], project_issue["id"], status_field["id"], option["id"])
+if __name__ == "__main__":
+    main()

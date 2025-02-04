@@ -1,6 +1,6 @@
 # Haste
 
-### Installation
+## Installation
 
 **1) Create virtual environment**
 
@@ -24,11 +24,21 @@ vim ~/.zshrc
 alias haste="~/.cli-venv/bin/python3 ~/code/haste/haste.py"
 ```
 
-### Usage
+## Usage
 
-For haste to work, use within a git repository _with staged changes_.
+For haste to work, use within a git repository.
 
-**Example**
+`haste <flow> <issue-title>`
+
+### Flows
+
+<u>bug</u>
+
+- Create an issue and a branch
+- Commit and push either staged or all changes to that branch
+- Create a PR for that issue and branch
+
+### Example
 
 ```bash
 >: haste bug "The quickest fix of them all"
