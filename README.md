@@ -32,7 +32,7 @@ For haste to work, use within a git repository.
 
 ### Flows
 
-<u>bug</u>
+<ins>bug</ins>
 
 - Create an issue and a branch
 - Commit and push either staged or all changes to that branch
