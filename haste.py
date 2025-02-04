@@ -81,7 +81,7 @@ def checkout_branch(branch: Branch):
 def commit_changes(message: str):
     if not has_staged_changes():
         run_command("git add --all")
-    run_command(f'git commit -m "{message}"')
+    run_command(f'git commit -m "{message}" --no-verify')
     print("Committed changes")
 
 
