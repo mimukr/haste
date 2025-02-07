@@ -49,7 +49,7 @@ def get_github_token() -> str:
 
 
 def slugify(text: str) -> str:
-    return text.lower().replace(" ", "-").replace("/", "")
+    return text.lower().replace(" ", "-").replace("/", "").replace("'", "").replace('"', "").replace(":", "")
 
 
 ################################################################
