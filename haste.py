@@ -49,7 +49,7 @@ def get_github_token() -> str:
 
 
 def slugify(text: str) -> str:
-    return text.lower().replace(" ", "-")
+    return text.lower().replace(" ", "-").replace("/", "")
 
 
 ################################################################
@@ -271,7 +271,7 @@ def bug_flow(ctx: FlowContext):
     new_branch = create_branch(ctx.repo, issue)
 
     checkout_branch(new_branch)
-    commit_changes(f"Fix: {ctx.issue_title}")
+    commit_changes(ctx.issue_title if ctx.issue_title.lower().startswith("fix") else f"Fix: {ctx.issue_title}")
     push_changes()
 
     create_pull_request(ctx.repo, new_branch, issue)
