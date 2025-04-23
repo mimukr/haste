@@ -23,7 +23,7 @@ def get_args() -> tuple[str, str]:
     # TODO: Use actual argparse
     args = sys.argv[1:]
     if not len(args) == 2 or args[0] not in FLOWS:
-        raise Exception(f"Usage: haste {'|'.join(FLOWS)} \"<issue-title>\"")
+        raise Exception(f'Usage: haste {"|".join(FLOWS)} "<issue-title>"')
 
     flow = args[0]
     issue_title = args[1]
@@ -95,12 +95,12 @@ def push_changes():
 ################################################################
 
 
-def create_issue(repo: Repository, title: str, assignee: NamedUser) -> Issue:
+def create_issue(repo: Repository, title: str, label: str, assignee: NamedUser) -> Issue:
     issue = repo.create_issue(
         title=title,
-        body="This issue was auto-created by https://github.com/mimukr/haste 🤖",
+        body="This issue was created using https://github.com/mimukr/haste 🤖",
         assignee=assignee,
-        labels=["bug"],
+        labels=[label],
     )
     print(f"Created issue: {issue.html_url}")
     return issue
@@ -206,9 +206,7 @@ def get_project_fields(token: str, project_id: int) -> list[dict]:
         }
       }
     }
-    """ % (
-        project_id,
-    )
+    """ % (project_id,)
     res = graphql(token, query)
     return res["data"]["node"]["fields"]["nodes"]
 
@@ -266,12 +264,12 @@ class FlowContext:
 Flow: TypeAlias = Callable[[FlowContext], None]
 
 
-def bug_flow(ctx: FlowContext):
-    issue = create_issue(ctx.repo, ctx.issue_title, ctx.me)
+def _standard_flow(ctx: FlowContext, label: str, title_processor: Callable[[str], str]) -> None:
+    issue = create_issue(ctx.repo, ctx.issue_title, label, ctx.me)
     new_branch = create_branch(ctx.repo, issue)
 
     checkout_branch(new_branch)
-    commit_changes(ctx.issue_title if ctx.issue_title.lower().startswith("fix") else f"Fix: {ctx.issue_title}")
+    commit_changes(title_processor(ctx.issue_title))
     push_changes()
 
     create_pull_request(ctx.repo, new_branch, issue)
@@ -279,8 +277,17 @@ def bug_flow(ctx: FlowContext):
     do_status_boogaroo(ctx.token, ctx.repo, issue, "In progress")
 
 
+def bug_flow(ctx: FlowContext):
+    _standard_flow(ctx, "bug", lambda title: title if title.lower().startswith("fix") else f"Fix: {title}")
+
+
+def task_flow(ctx: FlowContext):
+    _standard_flow(ctx, "task", lambda title: title[0].upper() + title[1:])
+
+
 FLOWS: dict[str, Flow] = {
     "bug": bug_flow,
+    "task": task_flow,
 }
 
 ################################################################
