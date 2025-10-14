@@ -23,7 +23,7 @@ def get_args() -> tuple[str, str]:
     # TODO: Use actual argparse
     args = sys.argv[1:]
     if not len(args) == 2 or args[0] not in FLOWS:
-        raise Exception(f"Usage: haste {'|'.join(FLOWS)} \"<issue-title>\"")
+        raise Exception(f'Usage: haste {"|".join(FLOWS)} "<issue-title>"')
 
     flow = args[0]
     issue_title = args[1]
@@ -80,7 +80,18 @@ def checkout_branch(branch: Branch):
 
 def commit_changes(message: str):
     if not has_staged_changes():
-        run_command("git add --all")
+        print("No changes to commit")
+        exit(1)
+        run_command("git ls-files -m | xargs git add")
+    run_command(f'git commit -m "{message}" --no-verify')
+    print("Committed changes")
+
+
+def commit_modified_changes(message: str):
+    if not has_staged_changes():
+        print("No changes to commit")
+        exit(1)
+        run_command("git ls-files -m | xargs git add")
     run_command(f'git commit -m "{message}" --no-verify')
     print("Committed changes")
 
@@ -206,9 +217,7 @@ def get_project_fields(token: str, project_id: int) -> list[dict]:
         }
       }
     }
-    """ % (
-        project_id,
-    )
+    """ % (project_id,)
     res = graphql(token, query)
     return res["data"]["node"]["fields"]["nodes"]
 
@@ -279,8 +288,29 @@ def bug_flow(ctx: FlowContext):
     do_status_boogaroo(ctx.token, ctx.repo, issue, "In progress")
 
 
+def bug_safe_flow(ctx: FlowContext):
+    issue = create_issue(ctx.repo, ctx.issue_title, ctx.me)
+    new_branch = create_branch(ctx.repo, issue)
+
+    checkout_branch(new_branch)
+    commit_modified_changes(ctx.issue_title if ctx.issue_title.lower().startswith("fix") else f"Fix: {ctx.issue_title}")
+    push_changes()
+
+    create_pull_request(ctx.repo, new_branch, issue)
+
+    do_status_boogaroo(ctx.token, ctx.repo, issue, "In progress")
+
+
+def issue_only(ctx: FlowContext):
+    issue = create_issue(ctx.repo, ctx.issue_title, ctx.me)
+
+    do_status_boogaroo(ctx.token, ctx.repo, issue, "In progress")
+
+
 FLOWS: dict[str, Flow] = {
     "bug": bug_flow,
+    "bug_safe": bug_safe_flow,
+    "issue": issue_only,
 }
 
 ################################################################
