@@ -88,7 +88,7 @@ def commit_changes(message: str):
     if not has_staged_changes():
         run_command("git add --all")
     run_command(f'git commit -m "{message}" --no-verify')
-    print("Committed changes")
+    print(f'Committed changes with message: "{message}"')
 
 
 def stop_if_no_changes():

@@ -1,5 +1,21 @@
 # Haste
 
+Have a one-line fix and feel too busy to create an issue with the correct label and assignee, create a branch with the corresponding issue number and title, commit to that branch with an appropriate message, create a PR linked to that issue and setting the issue to "In Progress" in the correct project?
+
+Fear not! Use haste!
+
+### Example
+
+```bash
+>: haste bug "The quickest fix of them all"
+Created issue: https://github.com/ORG/repo/issues/1337
+Created branch: 1337/the-quickest-fix-of-them-all
+Checked out branch: 1337/the-quickest-fix-of-them-all
+Committed changes with message: "Fix: The quickest fix of them all"
+Pushed changes
+Created PR: https://github.com/ORG/repo/pull/1337
+```
+
 ## Installation
 
 **1) Create virtual environment**
@@ -46,15 +62,3 @@ For haste to work, use within a git repository.
 - _bug:_ Issue with the bug label
 - _bug-safe:_ As above, but stop if no staged changes
 - _bug-only:_ As above, but skip git commands and only create issue
-
-### Example
-
-```bash
->: haste bug "The quickest fix of them all"
-Created issue: https://github.com/ORG/repo/issues/1337
-Created branch: 1337/the-quickest-fix-of-them-all
-Checked out branch: 1337/the-quickest-fix-of-them-all
-Committed changes
-Pushed changes
-Created PR: https://github.com/ORG/repo/pull/1337
-```
