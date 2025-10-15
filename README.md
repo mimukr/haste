@@ -1,6 +1,6 @@
 # Haste
 
-Have a one-line fix and feel too busy to create an issue with the correct label and assignee, create a branch with the corresponding issue number and title, commit to that branch with an appropriate message, create a PR linked to that issue and setting the issue to "In Progress" in the correct project?
+Have a one-line fix and feel too busy to create an issue with the correct label and assignee, create a branch with the corresponding issue number and title, commit to that branch with an appropriate message, create a PR linked to that issue and set the issue to "In Progress" in the correct project?
 
 Fear not! Use haste!
 
