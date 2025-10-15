@@ -32,11 +32,20 @@ For haste to work, use within a git repository.
 
 ### Flows
 
-<ins>bug</ins>
+<ins>Base Flow</ins>
 
 - Create an issue and a branch
 - Commit and push either staged or all changes to that branch
 - Create a PR for that issue and branch
+
+<ins>Flows</ins>
+
+- _issue:_ Issue without label
+- _issue-safe:_ As above, but stop if no staged changes
+- _issue-only:_ As above, but skip git commands and only create issue
+- _bug:_ Issue with the bug label
+- _bug-safe:_ As above, but stop if no staged changes
+- _bug-only:_ As above, but skip git commands and only create issue
 
 ### Example
 

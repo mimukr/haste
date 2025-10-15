@@ -8,6 +8,7 @@ from typing import Callable, TypeAlias
 
 import requests
 from github import Github
+from github.Auth import Token
 from github.Branch import Branch
 from github.Issue import Issue
 from github.NamedUser import NamedUser
@@ -23,7 +24,7 @@ def get_args() -> tuple[str, str]:
     # TODO: Use actual argparse
     args = sys.argv[1:]
     if not len(args) == 2 or args[0] not in FLOWS:
-        raise Exception(f"Usage: haste {'|'.join(FLOWS)} \"<issue-title>\"")
+        raise Exception(f'Usage: haste {"|".join(FLOWS)} "<issue-title>"')
 
     flow = args[0]
     issue_title = args[1]
@@ -57,6 +58,11 @@ def slugify(text: str) -> str:
 ################################################################
 
 
+def has_unstaged_changes() -> bool:
+    result = run_command("git diff")
+    return bool(result)
+
+
 def has_staged_changes() -> bool:
     result = run_command("git diff --staged")
     return bool(result)
@@ -85,6 +91,18 @@ def commit_changes(message: str):
     print("Committed changes")
 
 
+def stop_if_no_changes():
+    if not (has_staged_changes() or has_unstaged_changes()):
+        print("No changes to commit")
+        exit(1)
+
+
+def stop_if_no_staged_changes():
+    if not has_staged_changes():
+        print("No staged changes to commit")
+        exit(1)
+
+
 def push_changes():
     run_command("git push")
     print("Pushed changes")
@@ -95,12 +113,12 @@ def push_changes():
 ################################################################
 
 
-def create_issue(repo: Repository, title: str, assignee: NamedUser) -> Issue:
+def create_issue(repo: Repository, title: str, assignee: NamedUser, labels: list[str]) -> Issue:
     issue = repo.create_issue(
         title=title,
-        body="This issue was auto-created by https://github.com/mimukr/haste 🤖",
+        body="This issue was created using https://github.com/mimukr/haste 🏎️",
         assignee=assignee,
-        labels=["bug"],
+        labels=labels,
     )
     print(f"Created issue: {issue.html_url}")
     return issue
@@ -206,9 +224,7 @@ def get_project_fields(token: str, project_id: int) -> list[dict]:
         }
       }
     }
-    """ % (
-        project_id,
-    )
+    """ % (project_id,)
     res = graphql(token, query)
     return res["data"]["node"]["fields"]["nodes"]
 
@@ -266,21 +282,81 @@ class FlowContext:
 Flow: TypeAlias = Callable[[FlowContext], None]
 
 
-def bug_flow(ctx: FlowContext):
-    issue = create_issue(ctx.repo, ctx.issue_title, ctx.me)
-    new_branch = create_branch(ctx.repo, issue)
+def _base_flow(
+    ctx: FlowContext,
+    issue_labels: list[str] = [],
+    require_staged_changes: bool = False,
+    handle_code: bool = True,
+    commit_msg_processor: Callable[[str], str] = lambda msg: msg,
+):
+    if handle_code:
+        stop_if_no_changes()
+        if require_staged_changes:
+            stop_if_no_staged_changes()
 
-    checkout_branch(new_branch)
-    commit_changes(ctx.issue_title if ctx.issue_title.lower().startswith("fix") else f"Fix: {ctx.issue_title}")
-    push_changes()
+    issue = create_issue(ctx.repo, ctx.issue_title, ctx.me, issue_labels)
 
-    create_pull_request(ctx.repo, new_branch, issue)
+    if handle_code:
+        new_branch = create_branch(ctx.repo, issue)
+
+        checkout_branch(new_branch)
+        commit_changes(commit_msg_processor(issue.title))
+        push_changes()
+
+        create_pull_request(ctx.repo, new_branch, issue)
 
     do_status_boogaroo(ctx.token, ctx.repo, issue, "In progress")
 
 
+def issue_flow(ctx: FlowContext):
+    _base_flow(ctx=ctx)
+
+
+def issue_safe_flow(ctx: FlowContext):
+    _base_flow(ctx=ctx, require_staged_changes=True)
+
+
+def issue_only_flow(ctx: FlowContext):
+    _base_flow(ctx=ctx, handle_code=False)
+
+
+BUG_LABELS = ["bug"]
+BUG_MSG_PROCESSOR = lambda msg: msg if msg.lower().startswith("fix") else f"Fix: {msg}"  # noqa: E731
+
+
+def bug_flow(ctx: FlowContext):
+    _base_flow(
+        ctx=ctx,
+        issue_labels=BUG_LABELS,
+        commit_msg_processor=BUG_MSG_PROCESSOR,
+    )
+
+
+def bug_safe_flow(ctx: FlowContext):
+    _base_flow(
+        ctx=ctx,
+        issue_labels=BUG_LABELS,
+        commit_msg_processor=BUG_MSG_PROCESSOR,
+        require_staged_changes=True,
+    )
+
+
+def bug_only_flow(ctx: FlowContext):
+    _base_flow(
+        ctx=ctx,
+        issue_labels=BUG_LABELS,
+        commit_msg_processor=BUG_MSG_PROCESSOR,
+        handle_code=False,
+    )
+
+
 FLOWS: dict[str, Flow] = {
+    "issue": issue_flow,
+    "issue-safe": issue_safe_flow,
+    "issue-only": issue_only_flow,
     "bug": bug_flow,
+    "bug-safe": bug_safe_flow,
+    "bug-only": bug_only_flow,
 }
 
 ################################################################
@@ -293,7 +369,7 @@ def main():
 
     flow_name, issue_title = get_args()
     token = get_github_token()
-    gh = Github(token)
+    gh = Github(auth=Token(token))
 
     auth_user = gh.get_user()
     me = gh.get_user_by_id(auth_user.id)
