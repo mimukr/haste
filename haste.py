@@ -305,7 +305,7 @@ def _base_flow(
 
         create_pull_request(ctx.repo, new_branch, issue)
 
-    do_status_boogaroo(ctx.token, ctx.repo, issue, "Initial progress")
+    do_status_boogaroo(ctx.token, ctx.repo, issue, "Initial Progress")
 
 
 def issue_flow(ctx: FlowContext):
